@@ -1,0 +1,75 @@
+using Revise
+include("model_fit_global.jl")
+include("models.jl")
+include("helper_functions.jl")
+include("binning_helper_fs.jl")
+using DataFrames, Plots
+
+γϵ_data = CSV.read("C:/Users/stravaglino3/Downloads/julia_code/CD3_data/cd3ge-tcr-unbinned.txtbinned bond lifetime.csv",DataFrame)
+δϵ_data = CSV.read("C:/Users/stravaglino3/Downloads/julia_code/CD3_data/cd3de-tcr-unbinned.txtbinned bond lifetime.csv",DataFrame)
+
+γϵ = clean_dissociation_data(γϵ_data)
+δϵ = clean_dissociation_data(δϵ_data)
+
+
+t_γϵ, lnp_γϵ = separate_diss_data(γϵ)
+t_δϵ, lnp_δϵ = separate_diss_data(δϵ)
+# t_mix, lnp_mix = separate_diss_data(mix)
+p_γϵ = lnp2p.(lnp_γϵ)
+p_δϵ = lnp2p.(lnp_δϵ)
+# p_mix = lnp2p.(lnp_mix)
+
+plot()
+fs_γϵ = extract_avg_forces(γϵ)
+fs_δϵ = extract_avg_forces(δϵ)
+fs_mix = extract_avg_forces(mix)
+plotly()
+# plot(t_γϵ,lnp_γϵ ./ log(le))
+# plot(t_δϵ,lnp_δϵ)
+
+
+
+function normalize_lnp(lnp)
+    normlnpv = lnp ./ log(length(lnp)) .+ 1.0
+end
+    # normlnpv=[( lnp ./ log(length(lnp)) .+ 1.0) for lnp in lnp_γϵ]
+
+plot(t_γϵ,normalize_lnp.(lnp_γϵ))
+plot(t_δϵ,normalize_lnp.(lnp_δϵ))
+# p = survival_p(1:12)
+# lnp = log.(p)
+# γϵ_data[!,23][1:12] .= p
+# γϵ_data[!,24][1:12] .= lnp
+# γϵ_data
+# CSV.write("p.csv",γϵ_data)
+
+tspan = (0.0,20.0)
+t = collect(0.0:0.1:20)
+
+gr()
+
+## try bimolecular dissociation bell model with activated state
+
+u₀ = [1.0,0.0]          # Initial condition
+tspan = (0.0,15.0)  # Simulation interval
+
+model_opt = (0.,100.)
+pinit =ones(7)
+dens = fill([],length(t_γϵ))
+model = bimolecular_diss_bell_activated_state_w_cons!
+# cons_γϵ = [[k₋₁ᵒ[1], f] for f in f_γϵ_avg]
+using StatsBase
+f_γϵ_avg = extract_avg_forces(γϵ)
+cons_γϵ = [[14.1, f] for f in f_γϵ_avg]
+
+rates_γϵ,hes_γϵ,l_γϵ,boot_γϵ = optimization(model,p_γϵ,
+                    dens,cons_γϵ,model_opt,t_γϵ)
+
+p = rates_γϵ
+show_diss_fit(model, t_γϵ, p2lnp(p_γϵ), cons_γϵ)
+plot_F_vs_t(f_γϵ,t_γϵ)
+
+Fs = [[14.1, f] for f = 0.:0.5:30.]
+plot()
+plot_F_vs_t(γϵ)
+plot_force_lifetime_fit(model,Fs,γϵ)
